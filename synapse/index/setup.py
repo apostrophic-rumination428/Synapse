@@ -21,6 +21,8 @@ class IndexManager:
             "$.domain AS domain TAG SEPARATOR \"|\" "
             "$.type AS type TAG "
             "$.content AS content TEXT WEIGHT 1.0 "
+            "$.chunks[*].text AS chunk_text TEXT WEIGHT 1.5 "
+            "$.chunks[*].language AS chunk_lang TAG "
             "$.embedding AS embedding VECTOR FLAT 6 TYPE FLOAT32 DIM 768 DISTANCE_METRIC COSINE "
             "$.metadata.* AS metadata TEXT "
             "$.created_at AS created_at NUMERIC SORTABLE"
@@ -53,6 +55,8 @@ class IndexManager:
             TagField("$.domain", as_name="domain", separator="|"),
             TagField("$.type", as_name="type"),
             TextField("$.content", as_name="content", weight=1.0),
+            TextField("$.chunks[*].text", as_name="chunk_text", weight=1.5),
+            TagField("$.chunks[*].language", as_name="chunk_lang"),
             VectorField(
                 "$.embedding",
                 "FLAT",
