@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from .config import get_settings
 from .embeddings.unixcoder import UniXCoderBackend
 from .embeddings.cache import EmbeddingCache
+from .redis.client import SynapseRedis
 from .mcp.memorize import MCPMemorize
 from .mcp.recall import MCPRecall
 from .mcp.patch import MCPPatch
@@ -19,6 +20,7 @@ from .index.setup import IndexManager
 
 # Global instances
 redis_client = None
+synapse_redis = None
 embedding_backend = None
 embedding_cache = None
 mcp_memorize = None
@@ -29,7 +31,7 @@ mcp_patch = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan."""
-    global redis_client, embedding_backend, embedding_cache
+    global redis_client, synapse_redis, embedding_backend, embedding_cache
     global mcp_memorize, mcp_recall, mcp_patch
     
     # Startup
@@ -42,6 +44,9 @@ async def lifespan(app: FastAPI):
         decode_responses=True
     )
     
+    # Initialize SynapseRedis wrapper
+    synapse_redis = SynapseRedis(redis_client)
+    
     # Initialize embedding backend with cache
     embedding_backend = UniXCoderBackend()
     embedding_cache = EmbeddingCache(embedding_backend, max_size=settings.cache_size)
@@ -51,15 +56,15 @@ async def lifespan(app: FastAPI):
     index_manager.ensure_index()
     
     # Initialize MCP handlers
-    mcp_memorize = MCPMemorize(redis_client, embedding_cache)
-    mcp_recall = MCPRecall(redis_client, embedding_cache)
-    mcp_patch = MCPPatch(redis_client)
+    mcp_memorize = MCPMemorize(synapse_redis, embedding_cache)
+    mcp_recall = MCPRecall(synapse_redis, embedding_cache)
+    mcp_patch = MCPPatch(synapse_redis)
     
     yield
     
     # Shutdown
-    if redis_client:
-        redis_client.close()
+    if synapse_redis:
+        synapse_redis.close()
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -75,18 +80,21 @@ async def health_check():
     """Health check endpoint."""
     try:
         # Test Redis connection
-        redis_client.ping()
+        synapse_redis.ping()
         
         # Test embedding backend
         test_embedding = embedding_cache.embed("test")
+        settings = get_settings()
         
         return {
             "status": "healthy",
             "timestamp": time.time(),
+            "embedding_model": settings.embedding_model,
+            "embedding_dim": len(test_embedding) if test_embedding else 0,
             "services": {
                 "redis": "connected",
                 "embedding": "available",
-                "cache_stats": embedding_cache.get_stats() if embedding_cache else None
+                "cache_stats": embedding_cache.get_stats() if embedding_cache else None,
             }
         }
     except Exception as e:
@@ -100,40 +108,28 @@ async def health_check():
 
 
 @app.post("/mcp/memorize")
-async def memorize_endpoint(request: Dict[str, Any]):
-    """MCP memorize endpoint - store knowledge."""
-    start_time = time.time()
-    
+async def memorize_endpoint(request: Request):
+    """Accept both JSON-RPC 2.0 and direct payload."""
     try:
-        # Add request ID for tracking
-        request["request_id"] = str(uuid.uuid4())
+        body = await request.json()
         
-        # Process through MCP handler
-        result = mcp_memorize.handle_request(request)
+        # Detectar formato
+        if "jsonrpc" in body:
+            # JSON-RPC 2.0
+            params = body.get("params", {})
+        else:
+            # Payload direto (o que o deployment spec usa)
+            params = body
         
-        # Calculate latency
-        latency_ms = (time.time() - start_time) * 1000
-        
-        # Add metadata
-        if "result" in result:
-            result["result"]["metadata"] = {
-                "request_id": request["request_id"],
-                "latency_ms": round(latency_ms, 2),
-                "timestamp": time.time()
-            }
-        
+        result = mcp_memorize.handle_memorize(params)
         return result
         
     except Exception as e:
         return JSONResponse(
             status_code=500,
             content={
-                "jsonrpc": "2.0",
-                "id": request.get("id", ""),
-                "error": {
-                    "code": -32603,
-                    "message": str(e)
-                }
+                "status": "error",
+                "error": str(e)
             }
         )
 

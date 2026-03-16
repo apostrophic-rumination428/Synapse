@@ -41,6 +41,7 @@ class MCPMemorize(MCPBase):
             
             # Store node in Redis
             self.redis.store_node(
+                node_id=node_id,
                 domain=domain,
                 node_type=node_type,
                 content=content,
