@@ -114,14 +114,12 @@ jobs:
           action: up
 
       - name: Deploy via SSH
-        uses: D3rHase/ssh-command@v0.1.2
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          user: ${{ secrets.SSH_USER }}
-          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command: |
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_key
+          chmod 600 /tmp/ssh_key
+          ssh -i /tmp/ssh_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
             set -e
-            echo "Starting deployment to production server..."
+            echo 'Starting deployment to production server...'
             cd /opt/synapse
             sudo -u synapse git fetch origin main
             sudo -u synapse git reset --hard origin/main
@@ -129,7 +127,9 @@ jobs:
             sudo systemctl restart synapse-server
             sleep 10
             curl -sf http://localhost:8000/health || exit 1
-            echo "Deployment completed successfully!"
+            echo 'Deployment completed successfully!'
+          "
+          rm -f /tmp/ssh_key
 
       - name: Deployment Status
         if: always()
