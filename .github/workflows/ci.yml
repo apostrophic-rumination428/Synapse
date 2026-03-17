@@ -112,7 +112,6 @@ jobs:
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           action: up
-          tailscaled-args: "--ssh"
 
       - name: Deploy via SSH
         run: |
