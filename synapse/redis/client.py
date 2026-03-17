@@ -1,9 +1,10 @@
 """SynapseRedis — Wrapper que implementa interface esperada pelos handlers MCP."""
 
 import json
-import time
 import struct
+import time
 from typing import Any, Dict, List, Optional
+
 import redis
 from redis.commands.search.query import Query
 

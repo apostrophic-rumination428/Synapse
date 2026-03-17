@@ -1,7 +1,7 @@
 """MCP Memorize Handler - State → Embedding → Node."""
 
-from typing import Dict, Any
 import uuid
+from typing import Any, Dict
 
 from .base import MCPBase
 
