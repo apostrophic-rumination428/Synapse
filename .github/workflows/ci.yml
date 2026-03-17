@@ -114,12 +114,12 @@ jobs:
           action: up
 
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
+        uses: D3rHase/ssh-command@v0.1.2
         with:
           host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
+          user: ${{ secrets.SSH_USER }}
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command: |
             set -e
             echo "Starting deployment to production server..."
             cd /opt/synapse
