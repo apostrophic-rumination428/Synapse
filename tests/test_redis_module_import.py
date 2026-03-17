@@ -7,13 +7,13 @@ def test_redis_module_import():
     from synapse.redis.client import SynapseRedis
 
     assert SynapseRedis is not None
-    assert hasattr(SynapseRedis, 'store_node')
-    assert hasattr(SynapseRedis, 'get_node')
-    assert hasattr(SynapseRedis, 'update_node')
-    assert hasattr(SynapseRedis, 'search_hybrid')
-    assert hasattr(SynapseRedis, 'get_linked_nodes')
-    assert hasattr(SynapseRedis, 'ping')
-    assert hasattr(SynapseRedis, 'close')
+    assert hasattr(SynapseRedis, "store_node")
+    assert hasattr(SynapseRedis, "get_node")
+    assert hasattr(SynapseRedis, "update_node")
+    assert hasattr(SynapseRedis, "search_hybrid")
+    assert hasattr(SynapseRedis, "get_linked_nodes")
+    assert hasattr(SynapseRedis, "ping")
+    assert hasattr(SynapseRedis, "close")
 
 
 def test_redis_package_init():
