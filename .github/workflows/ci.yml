@@ -117,18 +117,30 @@ jobs:
         run: |
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_key
           chmod 600 /tmp/ssh_key
-          ssh -i /tmp/ssh_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-            set -e
-            echo 'Starting deployment to production server...'
-            cd /opt/synapse
-            sudo -u synapse git fetch origin main
-            sudo -u synapse git reset --hard origin/main
-            sudo -u synapse /opt/synapse/venv/bin/pip install -r requirements.txt
-            sudo systemctl restart synapse-server
-            sleep 10
-            curl -sf http://localhost:8000/health || exit 1
-            echo 'Deployment completed successfully!'
-          "
+          
+          # Test SSH connection
+          if ssh -i /tmp/ssh_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo 'SSH connection successful'"; then
+            echo "✅ SSH connection established, starting deployment..."
+            ssh -i /tmp/ssh_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+              set -e
+              echo 'Starting deployment to production server...'
+              cd /opt/synapse
+              sudo -u synapse git fetch origin main
+              sudo -u synapse git reset --hard origin/main
+              sudo -u synapse /opt/synapse/venv/bin/pip install -r requirements.txt
+              sudo systemctl restart synapse-server
+              sleep 10
+              curl -sf http://localhost:8000/health || exit 1
+              echo 'Deployment completed successfully!'
+            "
+          else
+            echo "❌ SSH connection blocked by Tailscale policy"
+            echo "🔧 FIX NEEDED: Update Tailscale ACL policy to allow SSH"
+            echo "Add this to your Tailscale ACL policy:"
+            echo '"ssh", ["autogroup:member", "autogroup:member", 22]'
+            exit 1
+          fi
+          
           rm -f /tmp/ssh_key
 
       - name: Deployment Status
