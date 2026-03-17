@@ -114,14 +114,11 @@ jobs:
           action: up
 
       - name: Deploy via SSH
-        uses: webfactory/ssh-action@v0.7.0
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          timeout: 30s
-          command_timeout: 10m
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -e
             echo "Starting deployment to production server..."
