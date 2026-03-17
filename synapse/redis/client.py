@@ -1,8 +1,8 @@
 """SynapseRedis — Wrapper que implementa interface esperada pelos handlers MCP."""
 
 import json
-import uuid
 import time
+import struct
 from typing import Any, Dict, List, Optional
 import redis
 from redis.commands.search.query import Query
@@ -10,21 +10,21 @@ from redis.commands.search.query import Query
 
 class SynapseRedis:
     """Wrapper sobre redis.Redis com métodos de alto nível."""
-    
+
     INDEX_NAME = "synapse_idx"
     NODE_PREFIX = "node:"
-    
+
     def __init__(self, redis_client: redis.Redis) -> None:
         """Initialize with raw Redis client."""
         self._client = redis_client
-    
+
     # ---- Low-level pass-through ----
     def ping(self) -> bool:
         return self._client.ping()
-    
+
     def close(self) -> None:
         self._client.close()
-    
+
     # ---- Node CRUD ----
     def store_node(
         self,
@@ -49,7 +49,7 @@ class SynapseRedis:
         }
         self._client.json().set(node_id, "$", node)
         return node_id
-    
+
     def get_node(self, node_id: str) -> Optional[Dict[str, Any]]:
         """Get node by ID. Returns None if not found."""
         try:
@@ -59,21 +59,21 @@ class SynapseRedis:
             return data
         except Exception:
             return None
-    
+
     def update_node(self, node_id: str, operations: List[Dict]) -> bool:
         """Apply JSON patch operations to node."""
         node = self.get_node(node_id)
         if not node:
             return False
-        
+
         for op in operations:
             path = op["path"]  # e.g. "$.metadata.foo"
             action = op["op"]  # set|delete|append
             value = op.get("value")
-            
+
             # Convert path for json().set (remove leading $.)
             json_path = path if path.startswith("$") else f"$.{path}"
-            
+
             if action == "set":
                 self._client.json().set(node_id, json_path, value)
             elif action == "delete":
@@ -83,9 +83,9 @@ class SynapseRedis:
                 if isinstance(current, list):
                     current.append(value)
                     self._client.json().set(node_id, json_path, current)
-        
+
         return True
-    
+
     # ---- Hybrid Search ----
     def search_hybrid(
         self,
@@ -98,23 +98,23 @@ class SynapseRedis:
         """Hybrid search: KNN (dense) + BM25 (sparse) → RRF fusion."""
         # Build RediSearch query
         q_parts = []
-        
+
         # Domain filter
         if domain_filter:
             domains = "|".join(domain_filter)
             q_parts.append(f"@domain:{{{domains}}}")
-        
+
         # Type filter
         if type_filter:
             types = "|".join(type_filter)
             q_parts.append(f"@type:{{{types}}}")
-        
+
         # BM25 text search
         if query:
             q_parts.append(f"(@content:{query}) | (@chunk_text:{query})")
-        
+
         filter_str = " ".join(q_parts) if q_parts else "*"
-        
+
         # KNN search if embedding provided
         if embedding:
             query_obj = (
@@ -126,13 +126,12 @@ class SynapseRedis:
             )
             try:
                 results = self._client.ft(self.INDEX_NAME).search(
-                    query_obj,
-                    query_params={"vec": self._float_to_bytes(embedding)}
+                    query_obj, query_params={"vec": self._float_to_bytes(embedding)}
                 )
                 return [self._doc_to_dict(doc) for doc in results.docs]
             except Exception:
                 pass
-        
+
         # Fallback: pure BM25
         query_obj = (
             Query(filter_str)
@@ -144,7 +143,7 @@ class SynapseRedis:
             return [self._doc_to_dict(doc) for doc in results.docs]
         except Exception:
             return []
-    
+
     # ---- Graph Traversal ----
     def get_linked_nodes(
         self,
@@ -156,30 +155,31 @@ class SynapseRedis:
         node = self.get_node(node_id)
         if not node:
             return []
-        
+
         linked_ids = set()
         links = node.get("links", {})
-        
+
         if direction in ("both", "inbound"):
             linked_ids.update(links.get("inbound", []))
         if direction in ("both", "outbound"):
             linked_ids.update(links.get("outbound", []))
-        
+
         # Fetch linked nodes
         linked_nodes = []
         for lid in linked_ids:
             ln = self.get_node(lid)
             if ln:
                 linked_nodes.append(ln)
-        
+
         return linked_nodes
-    
+
     # ---- Helpers ----
     def _float_to_bytes(self, vec: List[float]) -> bytes:
         """Convert float list to bytes for RediSearch KNN."""
         import struct
+
         return struct.pack(f"{len(vec)}f", *vec)
-    
+
     def _doc_to_dict(self, doc) -> Dict[str, Any]:
         """Convert RediSearch Document to dict."""
         d = doc.__dict__
