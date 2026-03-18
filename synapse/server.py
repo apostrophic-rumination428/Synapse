@@ -17,6 +17,7 @@ from .index.setup import IndexManager
 from .mcp.memorize import MCPMemorize
 from .mcp.patch import MCPPatch
 from .mcp.recall import MCPRecall
+from .mcp_discovery import MCPDiscovery
 from .redis.client import SynapseRedis
 
 # Global instances
@@ -27,13 +28,14 @@ embedding_cache = None
 mcp_memorize = None
 mcp_recall = None
 mcp_patch = None
+mcp_discovery = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan."""
     global redis_client, synapse_redis, embedding_backend, embedding_cache
-    global mcp_memorize, mcp_recall, mcp_patch
+    global mcp_memorize, mcp_recall, mcp_patch, mcp_discovery
 
     # Startup
     settings = get_settings()
@@ -58,6 +60,20 @@ async def lifespan(app: FastAPI):
     mcp_memorize = MCPMemorize(synapse_redis, embedding_cache)
     mcp_recall = MCPRecall(synapse_redis, embedding_cache)
     mcp_patch = MCPPatch(synapse_redis)
+    
+    # Initialize MCP Discovery
+    mcp_discovery = MCPDiscovery(synapse_redis)
+    
+    # Auto-register synapse server
+    server_info = {
+        "name": "synapse",
+        "description": "Synapse AKG Server - Agentic Knowledge Graph",
+        "version": "0.1.0",
+        "capabilities": ["memorize", "recall", "patch", "hybrid-search"],
+        "endpoints": ["/mcp/memorize", "/mcp/recall", "/mcp/patch", "/health", "/metrics"],
+        "transport": "HTTP"
+    }
+    mcp_discovery.register_server("synapse", server_info)
 
     yield
 
@@ -86,7 +102,7 @@ async def health_check():
         test_embedding = embedding_cache.embed("test")
         settings = get_settings()
 
-        return {
+        health_data = {
             "status": "healthy",
             "timestamp": time.time(),
             "embedding_model": settings.embedding_model,
@@ -97,10 +113,20 @@ async def health_check():
                 "cache_stats": embedding_cache.get_stats() if embedding_cache else None,
             },
         }
+        
+        # Update MCP discovery health data
+        if mcp_discovery:
+            mcp_discovery.update_health("synapse", health_data)
+
+        return health_data
     except Exception as e:
-        return JSONResponse(
-            status_code=503, content={"status": "unhealthy", "error": str(e)}
-        )
+        error_data = {"status": "unhealthy", "error": str(e), "timestamp": time.time()}
+        
+        # Update MCP discovery health data on error
+        if mcp_discovery:
+            mcp_discovery.update_health("synapse", error_data)
+            
+        return JSONResponse(status_code=503, content=error_data)
 
 
 @app.post("/mcp/memorize")
@@ -236,6 +262,109 @@ async def metrics_endpoint():
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/mcp/servers")
+async def list_mcp_servers():
+    """List all registered MCP servers."""
+    try:
+        servers = mcp_discovery.list_servers()
+        return {
+            "servers": servers,
+            "count": len(servers),
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=500, 
+            content={"error": "Failed to list servers", "detail": str(e)}
+        )
+
+
+@app.get("/mcp/server/{server_name}")
+async def get_mcp_server_info(server_name: str):
+    """Get detailed information about a specific MCP server."""
+    try:
+        server_info = mcp_discovery.get_server_info(server_name)
+        
+        if not server_info:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Server '{server_name}' not found"}
+            )
+        
+        return server_info
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Failed to get server info", "detail": str(e)}
+        )
+
+
+@app.get("/mcp/server/{server_name}/tools")
+async def get_mcp_server_tools(server_name: str):
+    """Get available tools for a specific MCP server."""
+    try:
+        tools = mcp_discovery.get_server_tools(server_name)
+        return {
+            "tools": tools,
+            "count": len(tools),
+            "server": server_name,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Failed to get server tools", "detail": str(e)}
+        )
+
+
+@app.post("/mcp/server/{server_name}/register")
+async def register_mcp_server(server_name: str, request: Dict[str, Any]):
+    """Register a new MCP server."""
+    try:
+        success = mcp_discovery.register_server(server_name, request)
+        
+        if success:
+            return {
+                "status": "registered",
+                "server": server_name,
+                "timestamp": time.time()
+            }
+        else:
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Failed to register server"}
+            )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Failed to register server", "detail": str(e)}
+        )
+
+
+@app.post("/mcp/server/{server_name}/health")
+async def update_server_health(server_name: str, health_data: Dict[str, Any]):
+    """Update health status for a specific server."""
+    try:
+        success = mcp_discovery.update_health(server_name, health_data)
+        
+        if success:
+            return {
+                "status": "updated",
+                "server": server_name,
+                "timestamp": time.time()
+            }
+        else:
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Failed to update health"}
+            )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Failed to update health", "detail": str(e)}
+        )
 
 
 @app.exception_handler(Exception)
