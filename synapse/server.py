@@ -74,19 +74,23 @@ async def lifespan(app: FastAPI):  # pragma: no cover
     mcp_discovery.register_server("synapse", server_info)
 
     # Start FastMCP in background task
-    mcp_task = asyncio.create_task(
-        mcp.run_sse(host="0.0.0.0", port=8080)  # nosec B104: Intentional binding for MCP server accessibility
-    )
+    # TODO: Fix FastMCP server startup - run_sse method doesn't exist
+    # Temporarily disabled to allow deployment to proceed
+    # mcp_task = asyncio.create_task(
+    #     mcp.run_sse(host="0.0.0.0", port=8080)  # nosec B104: Intentional binding for MCP server accessibility
+    # )
+    mcp_task = None  # Placeholder until MCP server is fixed
 
     try:
         yield
     finally:
         # Shutdown
-        mcp_task.cancel()
-        try:
-            await mcp_task
-        except asyncio.CancelledError:  # nosec B110: Expected cancellation, no action needed
-            pass
+        if mcp_task:
+            mcp_task.cancel()
+            try:
+                await mcp_task
+            except asyncio.CancelledError:  # nosec B110: Expected cancellation, no action needed
+                pass
         if synapse_redis:
             await synapse_redis.close()
 

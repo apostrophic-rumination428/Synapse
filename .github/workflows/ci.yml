@@ -137,40 +137,78 @@ jobs:
             sudo -u synapse git fetch origin main
             sudo -u synapse git reset --hard origin/main
             sudo -u synapse /opt/synapse/venv/bin/pip install -r requirements.txt
-            sudo systemctl restart synapse-server
-            echo "Service restarted, waiting for startup..."
-            sleep 15
             
-            # Check service status
+            # Restart service
+            sudo systemctl restart synapse-server
+            echo "⏳ Waiting 5s for process spawn..."
+            sleep 5
+            
+            # DEBUG BLOCK - Pre-health diagnostics
+            echo "=== SERVICE DIAGNOSTICS ==="
+            
+            # 1. Verify systemd thinks it's running
             if sudo systemctl is-active --quiet synapse-server; then
-              echo "✅ Synapse server is running"
+              echo "✅ systemd: active"
             else
-              echo "❌ Synapse server failed to start"
-              sudo systemctl status synapse-server
+              echo "❌ systemd: NOT active"
+              sudo systemctl status synapse-server --no-pager -n 20
               exit 1
             fi
             
-            # Health check with debugging
-            echo "Testing health endpoint..."
-            for i in {1..5}; do
+            # 2. Check process exists and port binding
+            echo "--- Process check ---"
+            if pgrep -f "uvicorn synapse.server:app" > /dev/null; then
+              echo "✅ uvicorn process running"
+              ps aux | grep "[u]vicorn synapse.server"
+            else
+              echo "❌ uvicorn process NOT found"
+            fi
+            
+            echo "--- Port binding check ---"
+            if ss -tlnp | grep -q ':8000'; then
+              echo "✅ Port 8000 is listening"
+              ss -tlnp | grep ':8000'
+            else
+              echo "⚠️  Port 8000 NOT listening (app likely crashed)"
+            fi
+            
+            # 3. Check last 50 lines for startup errors
+            echo "--- Recent logs (last 50 lines) ---"
+            sudo journalctl -u synapse-server --no-pager -n 50 | tail -20
+            
+            # Look for specific error patterns
+            if sudo journalctl -u synapse-server --no-pager -n 50 | grep -qi "error\|exception\|failed"; then
+              echo "❌ Errors detected in logs - dumping full context:"
+              sudo journalctl -u synapse-server --no-pager -n 100
+              exit 1
+            fi
+            
+            echo "=== END DIAGNOSTICS ==="
+            echo ""
+            
+            # Now attempt health checks with extended retries
+            echo "🏥 Testing health endpoint..."
+            for i in {1..10}; do
               if curl -sf http://localhost:8000/health; then
-                echo "✅ Health check passed"
+                echo "✅ Health check passed on attempt $i"
                 break
               else
-                echo "⚠️ Health check attempt $i failed, retrying..."
-                sleep 5
+                echo "⚠️  Attempt $i/10 failed, waiting 3s..."
+                sleep 3
+              fi
+              
+              # On last attempt, fail with full diagnostics
+              if [ $i -eq 10 ]; then
+                echo "❌ Health check failed after 10 attempts"
+                echo "Final port check:"
+                ss -tlnp | grep ':8000' || echo "Port 8000 not bound"
+                echo "Final log dump:"
+                sudo journalctl -u synapse-server --no-pager -n 100
+                exit 1
               fi
             done
             
-            # Final verification
-            if curl -sf http://localhost:8000/health; then
-              echo "✅ Deployment completed successfully!"
-            else
-              echo "❌ Health check failed after retries"
-              echo "Checking logs..."
-              sudo journalctl -u synapse-server --no-pager -n 20
-              exit 1
-            fi
+            echo "✅ Deployment verified - service healthy"
 
       - name: Deployment Status
         if: always()
