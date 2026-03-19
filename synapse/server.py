@@ -1,11 +1,11 @@
 """FastAPI Server for Synapse AKG."""
 
+import asyncio
 import time
-import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 
-import redis
+import redis.asyncio as redis_async
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
@@ -14,36 +14,34 @@ from .config import get_settings
 from .embeddings.cache import EmbeddingCache
 from .embeddings.unixcoder import UniXCoderBackend
 from .index.setup import IndexManager
-from .mcp.memorize import MCPMemorize
-from .mcp.patch import MCPPatch
-from .mcp.recall import MCPRecall
 from .mcp_discovery import MCPDiscovery
+from .mcp_server import initialize as init_mcp, mcp
 from .redis.client import SynapseRedis
 
+settings = get_settings()
+
 # Global instances
-redis_client = None
-synapse_redis = None
-embedding_backend = None
-embedding_cache = None
-mcp_memorize = None
-mcp_recall = None
-mcp_patch = None
-mcp_discovery = None
+synapse_redis: SynapseRedis | None = None
+embedding_cache: EmbeddingCache | None = None
+mcp_discovery: MCPDiscovery | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan."""
-    global redis_client, synapse_redis, embedding_backend, embedding_cache
-    global mcp_memorize, mcp_recall, mcp_patch, mcp_discovery
+    global synapse_redis, embedding_cache, mcp_discovery
 
     # Startup
     settings = get_settings()
 
     # Initialize Redis
-    redis_client = redis.Redis(
-        host=settings.redis_host, port=settings.redis_port, decode_responses=True
+    redis_client = redis_async.from_url(
+        settings.redis_url,
+        decode_responses=True,
+        socket_connect_timeout=5,
+        socket_keepalive=True
     )
+    await redis_client.ping()
 
     # Initialize SynapseRedis wrapper
     synapse_redis = SynapseRedis(redis_client)
@@ -56,30 +54,39 @@ async def lifespan(app: FastAPI):
     index_manager = IndexManager(redis_client)
     index_manager.ensure_index()
 
-    # Initialize MCP handlers
-    mcp_memorize = MCPMemorize(synapse_redis, embedding_cache)
-    mcp_recall = MCPRecall(synapse_redis, embedding_cache)
-    mcp_patch = MCPPatch(synapse_redis)
-    
+    # Initialize MCP server with dependencies
+    init_mcp(synapse_redis, embedding_cache)
+
     # Initialize MCP Discovery
     mcp_discovery = MCPDiscovery(synapse_redis)
-    
+
     # Auto-register synapse server
     server_info = {
         "name": "synapse",
         "description": "Synapse AKG Server - Agentic Knowledge Graph",
         "version": "0.1.0",
         "capabilities": ["memorize", "recall", "patch", "hybrid-search"],
-        "endpoints": ["/mcp/memorize", "/mcp/recall", "/mcp/patch", "/health", "/metrics"],
-        "transport": "HTTP"
+        "endpoints": ["/mcp", "/health", "/metrics"],
+        "transport": "MCP-HTTP"
     }
     mcp_discovery.register_server("synapse", server_info)
 
-    yield
+    # Start FastMCP in background task
+    mcp_task = asyncio.create_task(
+        mcp.run_sse(host="0.0.0.0", port=8080)
+    )
 
-    # Shutdown
-    if synapse_redis:
-        synapse_redis.close()
+    try:
+        yield
+    finally:
+        # Shutdown
+        mcp_task.cancel()
+        try:
+            await mcp_task
+        except asyncio.CancelledError:
+            pass
+        if synapse_redis:
+            await synapse_redis.close()
 
 
 # Initialize FastAPI app
@@ -230,11 +237,11 @@ async def metrics_endpoint():
     """Metrics endpoint."""
     try:
         # Get Redis info
-        redis_info = redis_client.info()
+        redis_info = await synapse_redis._client.info()
 
         # Get index stats
         try:
-            index_info = redis_client.ft("synapse_idx").info()
+            index_info = await synapse_redis._client.ft("synapse_idx").info()
             index_stats = {
                 "num_docs": index_info.get("num_docs", 0),
                 "max_doc_id": index_info.get("max_doc_id", 0),

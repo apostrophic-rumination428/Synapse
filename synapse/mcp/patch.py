@@ -2,42 +2,29 @@
 
 from typing import Any, Dict, List
 
-from .base import MCPBase
 
-
-class MCPPatch(MCPBase):
+class MCPPatch:
     """MCP handler for patch state operations."""
 
     def __init__(self, redis_client: Any) -> None:
         """Initialize with Redis client."""
-        super().__init__()
         self.redis = redis_client
-
-        # Register patch method
-        self.register("patch_state")(self.handle_patch)
 
     def handle_patch(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Handle patch request: validate → check existence → atomic update."""
         try:
-            # Validate required fields
             self._validate_params(params)
 
-            # Extract parameters
             node_id = params["node_id"]
             operations = params["operations"]
 
-            # Validate operations
             self._validate_operations(operations)
 
-            # Check if node exists
             node = self.redis.get_node(node_id)
             if not node:
                 return {"status": "error", "error": f"Node {node_id} not found"}
 
-            # Convert operations to Redis format
             redis_operations = []
-            updated_fields = []
-
             for op in operations:
                 redis_op = {
                     "path": op["path"],
@@ -45,15 +32,13 @@ class MCPPatch(MCPBase):
                     "value": op.get("value"),
                 }
                 redis_operations.append(redis_op)
-                updated_fields.append(op["path"])
 
-            # Apply atomic operations
             success = self.redis.update_node(node_id, redis_operations)
 
             if success:
-                return {"status": "success", "updated_fields": updated_fields}
+                return {"status": "success", "node_id": node_id, "updated": True}
             else:
-                return {"status": "error", "error": "Failed to apply operations"}
+                return {"status": "error", "node_id": node_id, "error": "Failed to apply operations"}
 
         except Exception as e:
             return {"status": "error", "error": str(e)}

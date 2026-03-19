@@ -3,22 +3,14 @@
 from textwrap import shorten
 from typing import Any, Dict
 
-import yaml
 
-from .base import MCPBase
-
-
-class MCPRecall(MCPBase):
+class MCPRecall:
     """MCP handler for recall context operations."""
 
     def __init__(self, redis_client: Any, embedding_service: Any) -> None:
         """Initialize with Redis client and embedding service."""
-        super().__init__()
         self.redis = redis_client
         self.embeddings = embedding_service
-
-        # Register recall method
-        self.register("recall_context")(self.handle_recall)
 
     def handle_recall(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Handle recall request: embed → search → resolve → compress."""
@@ -67,24 +59,11 @@ class MCPRecall(MCPBase):
                         }
                         resolved_edges.append(edge)
 
-            # Compressed YAML output
-            content_dict = {
-                "matched_nodes": matched_nodes,
-                "resolved_edges": resolved_edges,
+            return {
+                "results": matched_nodes,
+                "total": len(matched_nodes),
+                "query_time_ms": 0
             }
-
-            compressed_yaml = (
-                yaml.dump(
-                    content_dict,
-                    default_flow_style=True,
-                    sort_keys=False,
-                    allow_unicode=True,
-                )
-                .replace("\n", " ")
-                .replace("  ", " ")
-            )
-
-            return {"format": "compressed_yaml", "content": compressed_yaml}
 
         except Exception as e:
             return {"format": "error", "content": str(e)}

@@ -3,20 +3,14 @@
 import uuid
 from typing import Any, Dict
 
-from .base import MCPBase
 
-
-class MCPMemorize(MCPBase):
+class MCPMemorize:
     """MCP handler for memorize operations."""
 
     def __init__(self, redis_client: Any, embedding_service: Any) -> None:
         """Initialize with Redis client and embedding service."""
-        super().__init__()
         self.redis = redis_client
         self.embeddings = embedding_service
-
-        # Register memorize method
-        self.register("memorize")(self.handle_memorize)
 
     def handle_memorize(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Handle memorize request: validate → embed → store → respond."""
