@@ -138,7 +138,8 @@ jobs:
             sudo -u synapse git reset --hard origin/main
             sudo -u synapse /opt/synapse/venv/bin/pip install -r requirements.txt
             
-            # Restart service
+            # Restart service - clear logs first to only see fresh errors
+            sudo journalctl --rotate --vacuum-time=1s  # Clear old logs
             sudo systemctl restart synapse-server
             echo "⏳ Waiting 5s for process spawn..."
             sleep 5
