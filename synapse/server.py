@@ -132,7 +132,12 @@ async def mcp_endpoint(request: Request) -> Response:
                     response["error"] = {"code": -32603, "message": "MCP server not initialized"}
                 else:
                     result = await mcp.call_tool(tool_name, arguments)
-                    response["result"] = {"content": result.content or []}
+                    # FastMCP returns CallToolResult with .content and .data properties
+                    if result.data is not None:
+                        response["result"] = {"content": [{"type": "text", "text": str(result.data)}]}
+                    else:
+                        # Fallback to content array
+                        response["result"] = {"content": result.content or []}
             except Exception as e:
                 response["error"] = {"code": -32603, "message": str(e)}
         else:
