@@ -237,7 +237,7 @@ class TestSentenceTransformerBackend:
             ValueError,
             match="Model dimension 512 does not match ADR-001 requirement of 768",
         ):
-            backend = SentenceTransformerBackend()
+            SentenceTransformerBackend()
 
     @patch("synapse.embeddings.sentence_transformer.SentenceTransformer")
     def test_inheritance_from_embedding_backend(self, mock_sentence_transformer):
