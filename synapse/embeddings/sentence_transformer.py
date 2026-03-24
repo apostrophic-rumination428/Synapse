@@ -37,11 +37,11 @@ class SentenceTransformerBackend(EmbeddingBackend):
             if res and not isinstance(res[0], list):
                 return [res]
             return res
-        
+
         # In case it's a 1D list of floats
         if embeddings and isinstance(embeddings[0], float):
             return [embeddings]
-            
+
         return [list(emb) for emb in embeddings]
 
     def _validate_dimension(self) -> None:
