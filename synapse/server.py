@@ -4,7 +4,6 @@ import json
 import time
 from contextlib import asynccontextmanager
 
-import redis.asyncio as redis_async
 import redis
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
@@ -33,13 +32,15 @@ async def lifespan(app: FastAPI):  # pragma: no cover
     # Startup
     settings = get_settings()
 
-    # Initialize Redis
+    # Initialize Redis with connection pool for better thread safety
     redis_url = f"redis://{settings.redis_host}:{settings.redis_port}"
     redis_client = redis.from_url(
         redis_url,
         decode_responses=True,
         socket_connect_timeout=5,
         socket_keepalive=True,
+        max_connections=20,  # Connection pool for thread safety
+        retry_on_timeout=True,
     )
     redis_client.ping()
 
@@ -62,7 +63,7 @@ async def lifespan(app: FastAPI):  # pragma: no cover
     finally:
         # Shutdown
         if synapse_redis:
-            await synapse_redis.close()
+            synapse_redis.close()
 
 
 # Initialize FastAPI app
@@ -200,11 +201,11 @@ async def metrics_endpoint():
     """Metrics endpoint."""
     try:
         # Get Redis info
-        redis_info = await synapse_redis._client.info()
+        redis_info = synapse_redis._client.info()
 
         # Get index stats
         try:
-            index_info = await synapse_redis._client.ft("synapse_idx").info()
+            index_info = synapse_redis._client.ft("synapse_idx").info()
             index_stats = {
                 "num_docs": index_info.get("num_docs", 0),
                 "max_doc_id": index_info.get("max_doc_id", 0),

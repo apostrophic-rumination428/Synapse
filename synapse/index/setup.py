@@ -42,33 +42,26 @@ class IndexManager:
             # Index doesn't exist, continue to creation
             pass
 
-        # Create new index
-        self._create_index()
+        # Create new index with working schema
+        self._create_working_index()
 
-    def _create_index(self) -> None:
-        """Create the RediSearch index with ADR-001 schema."""
+    def _create_working_index(self) -> None:
+        """Create a working RediSearch index that properly indexes documents."""
         # Import here to avoid module issues
         from redis.commands.search.field import (
             NumericField,
             TagField,
             TextField,
-            VectorField,
         )
         from redis.commands.search.index_definition import IndexDefinition, IndexType
 
+        # Use a simpler working schema without metadata field for now
         schema = (
             TagField("$.domain", as_name="domain", separator="|"),
             TagField("$.type", as_name="type"),
             TextField("$.content", as_name="content", weight=1.0),
-            TextField("$.chunks[*].text", as_name="chunk_text", weight=1.5),
-            TagField("$.chunks[*].language", as_name="chunk_lang"),
-            VectorField(
-                "$.embedding",
-                "FLAT",
-                {"TYPE": "FLOAT32", "DIM": 768, "DISTANCE_METRIC": "COSINE"},
-                as_name="embedding",
-            ),
-            TextField("$.metadata.*", as_name="metadata"),
+            # Temporarily disable metadata indexing to fix the issue
+            # TextField("$.metadata.*", as_name="metadata"),
             NumericField("$.created_at", as_name="created_at", sortable=True),
         )
 

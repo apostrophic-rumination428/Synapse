@@ -23,7 +23,7 @@ embedding_cache: EmbeddingCache | None = None
 
 
 @mcp.tool()
-async def memorize(
+def memorize(
     domain: str,
     type: str,
     content: str,
@@ -59,7 +59,7 @@ async def memorize(
 
 
 @mcp.tool()
-async def recall(
+def recall(
     query: str,
     domain: list[str] | None = None,
     type: list[str] | None = None,
@@ -95,7 +95,7 @@ async def recall(
 
 
 @mcp.tool()
-async def patch(node_id: str, operations: list[dict]) -> dict:
+def patch(node_id: str, operations: list[dict]) -> dict:
     """
     Apply JSON Patch operations to update a node.
 

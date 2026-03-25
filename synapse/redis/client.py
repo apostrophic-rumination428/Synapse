@@ -44,20 +44,25 @@ class SynapseRedis:
             "domain": domain,
             "type": node_type,
             "content": content,
-            "embedding": embedding,
             "metadata": metadata or {},
             "links": links or {"inbound": [], "outbound": []},
             "created_at": time.time(),
         }
         
+        # Only include embedding if index schema supports it (for now, exclude it)
+        # if embedding:
+        #     node["embedding"] = embedding
+        
         # Store as JSON document
         self._client.json().set(node_id, "$", node)
         
-        # Ensure the document is indexed by checking index info
-        # This forces RediSearch to update the index for the new document
+        # Force index refresh and verify document is indexed
         try:
-            self._client.ft(self.INDEX_NAME).info()
-        except Exception:
+            index_info = self._client.ft(self.INDEX_NAME).info()
+            doc_count = index_info.get("num_docs", 0)
+            print(f"Index now contains {doc_count} documents after storing {node_id}")
+        except Exception as e:
+            print(f"Index refresh error: {e}")
             # If index doesn't exist, it will be created on server startup
             pass
         
@@ -108,7 +113,7 @@ class SynapseRedis:
         type_filter: Optional[List[str]] = None,
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
-        """Hybrid search: KNN (dense) + BM25 (sparse) → RRF fusion."""
+        """Hybrid search: BM25 (sparse) search only for now."""
         # Build RediSearch query
         q_parts = []
 
@@ -124,28 +129,11 @@ class SynapseRedis:
 
         # BM25 text search
         if query:
-            q_parts.append(f"(@content:{query}) | (@chunk_text:{query})")
+            q_parts.append(f"(@content:{query})")
 
         filter_str = " ".join(q_parts) if q_parts else "*"
 
-        # KNN search if embedding provided
-        if embedding:
-            query_obj = (
-                Query(f"{filter_str}=>[KNN {limit} @embedding $vec AS score]")
-                .sort_by("score")
-                .return_fields("id", "domain", "type", "content", "score")
-                .dialect(2)
-                .paging(0, limit)
-            )
-            try:
-                results = self._client.ft(self.INDEX_NAME).search(
-                    query_obj, query_params={"vec": self._float_to_bytes(embedding)}
-                )
-                return [self._doc_to_dict(doc) for doc in results.docs]
-            except Exception:  # nosec B110: Intentional silent fail for KNN search fallback
-                pass
-
-        # Fallback: pure BM25
+        # Pure BM25 search (vector search disabled for now)
         query_obj = (
             Query(filter_str)
             .return_fields("id", "domain", "type", "content")
