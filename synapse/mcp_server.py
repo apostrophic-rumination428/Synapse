@@ -61,8 +61,8 @@ def memorize(
 @mcp.tool()
 def recall(
     query: str,
-    domain: list[str] | None = None,
-    type: list[str] | None = None,
+    domain: str | list[str] | None = None,
+    type: str | list[str] | None = None,
     limit: int = 10,
     include_embedding: bool = False,
 ) -> dict:
